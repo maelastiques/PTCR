@@ -31,7 +31,7 @@ Instead of buying a commercial device, the obvious solution was to
 
 ![Device photo 1](images/ptcr-front.png) *Front view of the device*
 
-![Device photo 2](images/ptcr-isometric.png) *Side view / enclosure details*
+![Device photo 2](images/ptcr-isometric.png) *Isometric view*
 
 ![Device photo 3](images/pcb.png) *Internal electronics*
 
