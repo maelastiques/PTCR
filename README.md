@@ -70,6 +70,8 @@ The system is built around several main components:
   microSD        Data storage
   TPS62842       3.3V switching regulator
   LiPo battery   Power source
+  LP5012         12 PWM canals led module
+  MAX16150       switch ON/OFF with push button
 
 The PCB uses a **4‑layer stackup**:
 
@@ -157,6 +159,33 @@ Used for additional control signals and hardware expansion.
   CS       Chip select
 
 Shared SPI bus with other peripherals.
+
+------------------------------------------------------------------------
+
+## Leds module
+
+  Connected through **I²C**.
+
+  Signal       Description
+  ------------ ---------------
+  SDA          I²C data
+  SCL          I²C clock
+  OUT0-OUT11   12 PWM canals
+
+Used for 4 RGB leds
+
+------------------------------------------------------------------------
+
+
+## ON/OFF module
+
+  Signal       Description
+  ------------ ---------------
+  PB_IN        Button
+  CLR          Input signal
+  INT          Output signal
+
+Used for turning ON and OFF the regulator
 
 ------------------------------------------------------------------------
 
