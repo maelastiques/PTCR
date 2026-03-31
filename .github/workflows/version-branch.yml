@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   create-version:
     runs-on: ubuntu-latest
@@ -15,42 +18,99 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract version and clean message
+      - name: Fetch all branches
+        run: |
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*'
+
+      - name: Extract increment and clean message
         id: extract
+        shell: bash
         run: |
           msg="${{ github.event.head_commit.message }}"
           echo "Full message: $msg"
 
-          if [[ "$msg" =~ ^release:([0-9]{3})[[:space:]]*(.*)$ ]]; then
-            version="${BASH_REMATCH[1]}"
+          if [[ "$msg" =~ ^release:([0-9]{3})[[:space:]]+(.+)$ ]]; then
+            inc="${BASH_REMATCH[1]}"
             clean_msg="${BASH_REMATCH[2]}"
 
-            major=${version:0:1}
-            minor=${version:1:1}
-            patch=${version:2:1}
-            branch="V${major}.${minor}.${patch}"
-
-            echo "branch=$branch" >> $GITHUB_OUTPUT
-            echo "clean_msg=$clean_msg" >> $GITHUB_OUTPUT
+            echo "inc_major=${inc:0:1}" >> "$GITHUB_OUTPUT"
+            echo "inc_minor=${inc:1:1}" >> "$GITHUB_OUTPUT"
+            echo "inc_patch=${inc:2:1}" >> "$GITHUB_OUTPUT"
+            echo "clean_msg=$clean_msg" >> "$GITHUB_OUTPUT"
           else
-            echo "No release pattern found, skipping."
-            exit 0
+            echo "No release pattern found"
+          fi
+
+      - name: Find latest version branch
+        id: latest
+        if: steps.extract.outputs.clean_msg != ''
+        shell: bash
+        run: |
+          latest=$(
+            git branch -r \
+              | sed 's/^[ *]*//' \
+              | grep -E '^origin/v[0-9]+\.[0-9]+\.[0-9]+$' \
+              | sed 's|^origin/||' \
+              | sort -V \
+              | tail -n 1
+          )
+
+          if [ -z "$latest" ]; then
+            latest="v0.0.0"
+          fi
+
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+
+          version="${latest#v}"
+          IFS='.' read -r major minor patch <<< "$version"
+
+          echo "major=$major" >> "$GITHUB_OUTPUT"
+          echo "minor=$minor" >> "$GITHUB_OUTPUT"
+          echo "patch=$patch" >> "$GITHUB_OUTPUT"
+
+      - name: Compute new version
+        id: next
+        if: steps.extract.outputs.clean_msg != ''
+        shell: bash
+        run: |
+          major=${{ steps.latest.outputs.major }}
+          minor=${{ steps.latest.outputs.minor }}
+          patch=${{ steps.latest.outputs.patch }}
+
+          inc_major=${{ steps.extract.outputs.inc_major }}
+          inc_minor=${{ steps.extract.outputs.inc_minor }}
+          inc_patch=${{ steps.extract.outputs.inc_patch }}
+
+          new_major=$((major + inc_major))
+          new_minor=$((minor + inc_minor))
+          new_patch=$((patch + inc_patch))
+
+          branch="v${new_major}.${new_minor}.${new_patch}"
+
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "Computed branch: $branch"
+
+      - name: Fail if branch already exists
+        if: steps.next.outputs.branch != ''
+        shell: bash
+        run: |
+          BRANCH="${{ steps.next.outputs.branch }}"
+          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
+            echo "Branch $BRANCH already exists"
+            exit 1
           fi
 
       - name: Create version branch with clean commit
-        if: steps.extract.outputs.branch != ''
+        if: steps.next.outputs.branch != ''
+        shell: bash
         run: |
-          BRANCH="${{ steps.extract.outputs.branch }}"
+          BRANCH="${{ steps.next.outputs.branch }}"
           MSG="${{ steps.extract.outputs.clean_msg }}"
 
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # créer branche à partir de main
           git checkout -b "$BRANCH"
-
-          # recréer commit avec même contenu mais nouveau message
           git reset --soft HEAD~1
           git commit -m "$MSG"
-
           git push origin "$BRANCH"
