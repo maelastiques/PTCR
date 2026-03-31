@@ -10,32 +10,47 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout full history
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Extract version from commit message
-        id: version
+      - name: Extract version and clean message
+        id: extract
         run: |
           msg="${{ github.event.head_commit.message }}"
-          echo "Commit message: $msg"
+          echo "Full message: $msg"
 
-          if [[ "$msg" =~ release:([0-9]{3}) ]]; then
+          if [[ "$msg" =~ ^release:([0-9]{3})[[:space:]]*(.*)$ ]]; then
             version="${BASH_REMATCH[1]}"
+            clean_msg="${BASH_REMATCH[2]}"
+
             major=${version:0:1}
             minor=${version:1:1}
             patch=${version:2:1}
             branch="V${major}.${minor}.${patch}"
+
             echo "branch=$branch" >> $GITHUB_OUTPUT
+            echo "clean_msg=$clean_msg" >> $GITHUB_OUTPUT
           else
-            echo "No version found, skipping."
+            echo "No release pattern found, skipping."
             exit 0
           fi
 
-      - name: Create and push branch
-        if: steps.version.outputs.branch != ''
+      - name: Create version branch with clean commit
+        if: steps.extract.outputs.branch != ''
         run: |
+          BRANCH="${{ steps.extract.outputs.branch }}"
+          MSG="${{ steps.extract.outputs.clean_msg }}"
+
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-          git branch "${{ steps.version.outputs.branch }}"
-          git push origin "${{ steps.version.outputs.branch }}"
+          # créer branche à partir de main
+          git checkout -b "$BRANCH"
+
+          # recréer commit avec même contenu mais nouveau message
+          git reset --soft HEAD~1
+          git commit -m "$MSG"
+
+          git push origin "$BRANCH"
